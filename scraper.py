@@ -1,8 +1,8 @@
 import requests
 from bs4 import BeautifulSoup
-from re import sub, findall
+import re
 import os
-
+import datetime
 
 NO_DATA = '-'
 TASKS_AT_ONE_PAGE = 12
@@ -44,11 +44,11 @@ def scrape_page(url, task_lists_dict):
         except AttributeError:
             # When a description has no show/hide feature.
             description = task.find('div', class_='mt10').text
-        description = sub(r'\n{2,}', '\n', description)
+        description = re.sub(r'\n{2,}', '\n', description)
         task_lists_dict[labels[1]].append(description)
 
         price = task.find('div', class_='wants-card__header-price').text
-        price = ''.join(findall(r'\d+', price))
+        price = re.search(r'\d[\d ]+', price).group()
         task_lists_dict[labels[2]].append(price)
 
     next_page_anchor = page_soup.find('a', class_='next')
@@ -68,8 +68,10 @@ def save_data_to_txt(cat_name):
     f_name = os.path.join(OUTPUT_FILES_DIR, f'{cat_name}_scraped_data.txt')
     with open(f_name, 'w', encoding='utf-8') as out_file:
         lists = STORAGE[cat_name]['data'].values()
-        text = ''
-        for fields in zip(*lists):
+        text = f'Projects at "{cat_name}"' \
+               f' scraped on {datetime.datetime.now()}\n\n'
+        for item_number, fields in enumerate(zip(*lists), 1):
+            text += str(item_number) + '. '
             rows = list(zip(field_names, fields))
             rows = list(map(lambda row: ':\n'.join(row), rows))
             text += '\n\n'.join(rows)
