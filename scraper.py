@@ -16,6 +16,8 @@ OUTPUT_FILES_DIR = 'output'
 FIELD_NAMES = [
     'TITLE',
     'DESCRIPTION',
+    'TIMEOUT',
+    'OFFERS',
     'PRICE_UP_TO',
 ]
 CATEGORIES = []
@@ -27,13 +29,13 @@ with open('CATEGORIES.dat', 'r') as cats:
 
 def scrape_category(cat_name, window: sg.Window):
     cat_code = cat_name.split()[1]
-    status = scrape_page(f'{BASE_URL}?c={cat_code}', PROJECTS, FIELD_NAMES, 1)
+    status = scrape_page(f'{BASE_URL}?c={cat_code}', 1)
     window.refresh()
     while status['next_page']:
-        status = scrape_page(status['next_page'], PROJECTS, FIELD_NAMES,
+        status = scrape_page(status['next_page'],
                              status['last_pr_num'])
 
-def scrape_page(url, projects_dict, field_names, last_pr_num):
+def scrape_page(url, last_pr_num):
     """Scrapes a page and returns scraping status."""
     print(MARGIN + 'scraping', url, end='\n\n')
     with requests.get(url) as resp:
@@ -42,7 +44,7 @@ def scrape_page(url, projects_dict, field_names, last_pr_num):
     for pr_num, prj in enumerate(page_soup.find_all('div', class_='want-card'), last_pr_num):
         scraped_prj = {}
         title = prj.find('div', class_='wants-card__header-title').a.text
-        scraped_prj[field_names[0]] = title
+        scraped_prj[FIELD_NAMES[0]] = title
 
         # When a description is partial with show/hide feature.
         d_cls = 'breakwords first-letter f14 js-want-block-toggle ' \
@@ -55,15 +57,22 @@ def scrape_page(url, projects_dict, field_names, last_pr_num):
         anchors = description.find_all('a')
         description = re.sub(r'\n{2,}', '\n', description.text).strip()
         for anchor in anchors:
-            anchor_text = anchor.text.strip()
-            anchor_text_and_href = f'[{anchor_text}] (< {anchor["href"]} >)'
-            description = description.replace(anchor_text, anchor_text_and_href)
-        scraped_prj[field_names[1]] = description
+            anc_text = anchor.text.strip()
+            anc_text_and_href = f'[{anc_text}] (< {anchor["href"]} >)'
+            description = description.replace(anc_text, anc_text_and_href)
+        scraped_prj[FIELD_NAMES[1]] = description
+
+        info = prj.find('div', class_='query-item__info mb10 ta-left')
+        timeout, offers = info.text.split(' \xa0\xa0\xa0')
+        timeout = timeout[timeout.find(' ') + 1:]
+        offers = re.search(r'\d+', offers).group()
+        scraped_prj[FIELD_NAMES[2]] = timeout
+        scraped_prj[FIELD_NAMES[3]] = offers
 
         price = prj.find('div', class_='wants-card__header-price').text
         price = re.search(r'\d[\d ]+', price).group()
-        scraped_prj[field_names[2]] = price
-        projects_dict.append(scraped_prj)
+        scraped_prj[FIELD_NAMES[4]] = price
+        PROJECTS.append(scraped_prj)
 
         print(get_project_as_text(scraped_prj, pr_num))
         window.refresh()
@@ -79,8 +88,9 @@ def get_project_as_text(project, item_number):
     title = f'{MARGIN}№ {str(item_number)}: {fields[0][1].upper()}'
     desc = f'{MARGIN + fields[1][0]}:\n{fields[1][1]}'
     price = f'{MARGIN + fields[2][0]}: {fields[2][1]}'
-
-    text += '\n'.join((title, desc, price))
+    timeout = f'{MARGIN + fields[3][0]}: {fields[3][1]}'
+    offers = f'{MARGIN + fields[4][0]}: {fields[4][1]}'
+    text += '\n'.join((title, desc, price, timeout, offers))
     text += '\n'*3
     return text
 
