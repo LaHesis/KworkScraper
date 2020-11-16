@@ -27,21 +27,26 @@ with open('CATEGORIES.dat', 'r') as cats:
         CATEGORIES.append(line.strip())
 
 
-def scrape_category(cat_name, window: sg.Window):
+def scrape_category(cat_name, necessaryText, window: sg.Window):
     cat_code = cat_name.split()[1]
-    status = scrape_page(f'{BASE_URL}?c={cat_code}', 1)
+    status = scrape_page(f'{BASE_URL}?c={cat_code}', necessaryText, 1)
     window.refresh()
-    while status['next_page']:
-        status = scrape_page(status['next_page'],
-                             status['last_pr_num'])
+    while status['next_page_url']:
+        status = scrape_page(
+            status['next_page_url'], necessaryText, status['last_pr_num']
+        )
+    print('The category has been scraped.')
 
-def scrape_page(url, last_pr_num):
+
+def scrape_page(url, necessaryText, last_pr_num):
     """Scrapes a page and returns scraping status."""
     print(MARGIN + 'scraping', url, end='\n\n')
     with requests.get(url) as resp:
         page_soup = BeautifulSoup(resp.text, 'html.parser')
 
-    for pr_num, prj in enumerate(page_soup.find_all('div', class_='want-card'), last_pr_num):
+    for pr_num, prj in enumerate(
+        page_soup.find_all('div', class_='want-card'), last_pr_num
+    ):
         scraped_prj = {}
         title = prj.find('div', class_='wants-card__header-title').a.text
         scraped_prj[FIELD_NAMES[0]] = title
@@ -61,6 +66,10 @@ def scrape_page(url, last_pr_num):
             anc_text_and_href = f'[{anc_text}] (< {anchor["href"]} >)'
             description = description.replace(anc_text, anc_text_and_href)
         scraped_prj[FIELD_NAMES[1]] = description
+        # Project title or description should contain necessary text.
+        if necessaryText and necessaryText not in scraped_prj[FIELD_NAMES[0]] \
+                and necessaryText not in scraped_prj[FIELD_NAMES[1]]:
+            continue
 
         info = prj.find('div', class_='query-item__info mb10 ta-left')
         timeout, offers = info.text.split(' \xa0\xa0\xa0')
@@ -78,8 +87,10 @@ def scrape_page(url, last_pr_num):
         window.refresh()
 
     next_page_anchor = page_soup.find('a', class_='next')
-    return {'next_page': bool(next_page_anchor) and next_page_anchor['href'],
-            'last_pr_num': pr_num}
+    return {
+        'next_page_url': bool(next_page_anchor) and next_page_anchor['href'],
+        'last_pr_num': pr_num
+    }
 
 
 def get_project_as_text(project, item_number):
@@ -124,7 +135,7 @@ buttons = [
     sg.Button('Exit'),
 ]
 layout = [
-    [sg.Text('Select category:'), sg.Combo(CATEGORIES, key='Category', default_value=CATEGORIES[0])],
+    [sg.Text('Select category:'), sg.Combo(CATEGORIES, key='Category', default_value=CATEGORIES[0]), sg.Text('Project must contain text:'), sg.Input(key='NecessaryText')],
     [*buttons],
     [sg.Text('Projects in the category:')],
     [prjs_out],
@@ -145,11 +156,11 @@ while True:
         prjs_out.update(get_scraping_title(values["Category"]))
         date = datetime.datetime.now()
         PROJECTS.clear()
-        scrape_category(values['Category'], window)
+        scrape_category(values['Category'], values['NecessaryText'], window)
     elif event == 'Save scraped projects to file':
         if not PROJECTS:
             sg.popup_error('Nothing to save yet.')
         else:
             save_projects_to_file(values['Category'])
     elif event == 'Open saved files directory':
-        subprocess.Popen(r'explorer /open,' + OUTPUT_FILES_DIR)
+        subprocess.Popen(r'explorer /open ' + OUTPUT_FILES_DIR)
