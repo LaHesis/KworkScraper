@@ -10,7 +10,7 @@ DESC_CSS_CLASS = 'js-want-block-toggle-full'
 TITLE_CSS_CLASS = 'wants-card__header-title'
 SHORT_DESC_CSS_CLASS = 'wants-card__description-text'
 TIME_AND_OFFERS_CSS_CLASS = 'query-item__info'
-TIME_AND_OFFERS_DELIM_CSS_CLASS = ' \xa0\xa0\xa0'
+TIME_AND_OFFERS_DELIM = ' \xa0\xa0\xa0'
 PRICE_CSS_CLASS = 'wants-card__header-price'
 
 # Their order is very important. Data rows are being added in the same order.
