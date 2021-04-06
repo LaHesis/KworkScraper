@@ -1,17 +1,18 @@
+import datetime
+import os
+import re
+import subprocess
+
+import PySimpleGUI as sg
 import requests
 from bs4 import BeautifulSoup
-import re
-import os
-import datetime
-import PySimpleGUI as sg
-import subprocess
 
 import consts as c
 
 category_names = []
 category_ids = []
 # Kwork projects (orders).
-projects = []
+parsed_projects = []
 
 with open('CATEGORIES.dat', 'r') as cats:
     for line in cats:
@@ -21,27 +22,25 @@ with open('CATEGORIES.dat', 'r') as cats:
         category_ids.append(cat_id)
 
 
-def scrape_category(cat_name: str, requiredText, window: sg.Window):
+def scrape_category(cat_name: str, required_text, window: sg.Window):
     cat_index = category_names.index(cat_name)
     cat_code = category_ids[cat_index]
-    status = scrape_page(f'{c.BASE_URL}?c={cat_code}', requiredText, 1)
+    status = scrape_page(f'{c.BASE_URL}?c={cat_code}', required_text, 1)
     window.refresh()
     while status['next_page_url']:
         status = scrape_page(
-            status['next_page_url'], requiredText, status['last_pr_num']
+            status['next_page_url'], required_text, status['last_pr_num']
         )
     print('The category has been scraped.')
 
 
-def scrape_page(url, requiredText, last_pr_num):
+def scrape_page(url, required_text, last_pr_num):
     """Scrapes a page and returns scraping status."""
     print(c.MARGIN + 'scraping', url, end='\n\n')
-    with requests.get(url) as resp:
-        page_soup = BeautifulSoup(resp.text, 'html.parser')
-
-    for pr_num, prj in enumerate(
-        page_soup.find_all('div', class_='want-card'), last_pr_num
-    ):
+    resp = requests.get(url)
+    page_soup = BeautifulSoup(resp.text, 'html.parser')
+    scraped_projects = page_soup.find_all('div', class_='want-card')
+    for pr_num, prj in enumerate(scraped_projects, last_pr_num):
         scraped_prj = {}
         title = prj.find('div', class_=c.TITLE_CSS_CLASS).a.text
         scraped_prj[c.FIELD_NAMES[0]] = title
@@ -59,8 +58,8 @@ def scrape_page(url, requiredText, last_pr_num):
             description = description.replace(anc_text, anc_text_and_href)
         scraped_prj[c.FIELD_NAMES[1]] = description
         # Project title or description should contain required text.
-        if requiredText and requiredText not in scraped_prj[c.FIELD_NAMES[0]].lower() \
-                and requiredText not in scraped_prj[c.FIELD_NAMES[1]].lower():
+        if required_text and required_text not in title.lower() \
+                and required_text not in description.lower():
             continue
 
         info = prj.find('div', class_=c.TIME_AND_OFFERS_CSS_CLASS)
@@ -77,7 +76,7 @@ def scrape_page(url, requiredText, last_pr_num):
         price = prj.find('div', class_=c.PRICE_CSS_CLASS).text
         price = re.search(r'\d[\d ]+', price).group()
         scraped_prj[c.FIELD_NAMES[4]] = price
-        projects.append(scraped_prj)
+        parsed_projects.append(scraped_prj)
 
         print(get_project_as_text(scraped_prj, pr_num))
         window.refresh()
@@ -106,7 +105,7 @@ def save_projects_to_file(cat_name):
     print(f'saving {cat_name}')
     f_name = os.path.join(c.OUTPUT_FILES_DIR, f'{cat_name}_scraped_data.txt')
     with open(f_name, 'w', encoding='utf-8') as out_file:
-        for project in print_projects_of_cat_as_texts(cat_name, projects):
+        for project in print_projects_of_cat_as_texts(cat_name, parsed_projects):
             out_file.write(project)
 
 
@@ -121,19 +120,19 @@ def get_scraping_title(cat_name):
     return f'{c.MARGIN}Projects at "{cat_name}" scraped on {date}\n\n'
 
 
-sg.theme('LightGreen1')
+sg.theme(c.USED_THEME)
 prjs_out = sg.Output(size=(160, 30))
 buttons = [
-    sg.Button('Scrape projects'),
-    sg.Button('Save scraped projects to file'),
-    sg.Button('Open saved files directory'),
-    sg.Button('Exit'),
+    sg.Button(c.SCRAPE_PRJCTS_BTN_NM),
+    sg.Button(c.SAVE_PRJCTS_BTN_NM),
+    sg.Button(c.OPEN_SAVED_PRJCTS_BTN_NM),
+    sg.Button(c.CLOSE_PROGRAM_BTN_NM),
 ]
 layout = [
     [
         sg.Text('Select category:'),
-        sg.Combo(category_names, key='category', default_value=category_names[0]),
-        sg.Text('Project must contain text:'), sg.Input(key='requiredText')
+        sg.Combo(category_names, key=c.CAT_COMBO_KEY, default_value=category_names[0]),
+        sg.Text('Project must contain text:'), sg.Input(key=c.REQUIRED_TEXT_INPUT_KEY)
     ],
     [*buttons],
     [sg.Text('Projects in the category:')],
@@ -151,18 +150,18 @@ for btn in buttons:
 # Event loop.
 while True:
     event, values = window.read()
-    # Stop loop when user closes window or clicks 'Exit' button.
-    if event in (None, 'Exit'):
+    # Stop loop when user closes window or clicks c.CLOSE_PROGRAM_BTN_NM button.
+    if event in (None, c.CLOSE_PROGRAM_BTN_NM):
         break
-    if event == 'Scrape projects':
-        prjs_out.update(get_scraping_title(values['category']))
+    if event == c.SCRAPE_PRJCTS_BTN_NM:
+        prjs_out.update(get_scraping_title(values[c.CAT_COMBO_KEY]))
         date = datetime.datetime.now()
-        projects.clear()
-        scrape_category(values['category'], values['requiredText'].lower(), window)
-    elif event == 'Save scraped projects to file':
-        if not projects:
+        parsed_projects.clear()
+        scrape_category(values[c.CAT_COMBO_KEY], values[c.REQUIRED_TEXT_INPUT_KEY].lower(), window)
+    elif event == c.SAVE_PRJCTS_BTN_NM:
+        if not parsed_projects:
             sg.popup_error('Nothing to save yet.')
         else:
-            save_projects_to_file(values['category'])
-    elif event == 'Open saved files directory':
+            save_projects_to_file(values[c.CAT_COMBO_KEY])
+    elif event == c.OPEN_SAVED_PRJCTS_BTN_NM:
         subprocess.Popen(r'explorer /open ' + c.OUTPUT_FILES_DIR)

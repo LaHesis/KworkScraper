@@ -21,3 +21,11 @@ FIELD_NAMES = [
     'OFFERS',
     'PRICE_UP_TO',
 ]
+
+USED_THEME = 'LightGreen1'
+SCRAPE_PRJCTS_BTN_NM = 'Scrape projects'
+SAVE_PRJCTS_BTN_NM = 'Save scraped projects to file'
+OPEN_SAVED_PRJCTS_BTN_NM = 'Open saved files directory'
+CLOSE_PROGRAM_BTN_NM = 'Exit'
+CAT_COMBO_KEY = 'category'
+REQUIRED_TEXT_INPUT_KEY = 'required_text'
